@@ -1,2 +1,2 @@
 # dockerh
-A scylla database connector helper. This library was made to help configure the gocql or gocqlx libraries.
+A library to help execute docker commands from a golang binary.
