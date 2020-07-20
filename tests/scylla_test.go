@@ -5,8 +5,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uol/dockerh"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/uol/docker"
 )
 
 // TestScylla - tests the scylla pod
@@ -14,14 +15,14 @@ func TestScylla(t *testing.T) {
 
 	pod := "test-scylla-pod"
 
-	docker.Remove(pod)
+	dockerh.Remove(pod)
 
-	ip, err := docker.StartScylla(pod, "", "", 30*time.Second)
+	ip, err := dockerh.StartScylla(pod, "", "", 30*time.Second)
 	if !assert.NoError(t, err, "error starting scylla pod") {
 		return
 	}
 
-	defer docker.Remove(pod)
+	defer dockerh.Remove(pod)
 
 	assert.Regexp(t, regexp.MustCompile(`[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+`), ip, "expected some valid ip")
 }

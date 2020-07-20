@@ -1,4 +1,4 @@
-module github.com/uol/docker
+module github.com/uol/dockerh
 
 go 1.14
 

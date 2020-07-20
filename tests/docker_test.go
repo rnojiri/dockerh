@@ -9,8 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/uol/dockerh"
+
 	"github.com/stretchr/testify/assert"
-	"github.com/uol/docker"
 )
 
 //
@@ -69,7 +70,7 @@ func TestRun(t *testing.T) {
 
 	rmPod(pod)
 
-	err := docker.Run(pod, "hello-world", "")
+	err := dockerh.Run(pod, "hello-world", "")
 	if assert.NoError(t, err, "error not expected") {
 		return
 	}
@@ -94,7 +95,7 @@ func TestRemove(t *testing.T) {
 		return
 	}
 
-	err := docker.Remove(pod)
+	err := dockerh.Remove(pod)
 	if !assert.NoError(t, err, "error not expected") {
 		return
 	}
@@ -126,7 +127,7 @@ func TestGetIPs(t *testing.T) {
 
 	format := ".NetworkSettings.Networks.bridge.IPAddress"
 
-	libIps, err := docker.GetIPs(format, pod)
+	libIps, err := dockerh.GetIPs(format, pod)
 	if !assert.NoError(t, err, "error not expected") {
 		return
 	}
@@ -160,7 +161,7 @@ func TestExists(t *testing.T) {
 
 	defer rmPod(pod)
 
-	exists, err := docker.Exists(pod, docker.Running)
+	exists, err := dockerh.Exists(pod, dockerh.Running)
 	if !assert.NoError(t, err, "error not expected") {
 		return
 	}
@@ -171,7 +172,7 @@ func TestExists(t *testing.T) {
 
 	<-time.After(2 * time.Second)
 
-	exists, err = docker.Exists(pod, docker.Exited)
+	exists, err = dockerh.Exists(pod, dockerh.Exited)
 	if !assert.NoError(t, err, "error not expected") {
 		return
 	}
@@ -182,7 +183,7 @@ func TestExists(t *testing.T) {
 
 	rmPod(pod)
 
-	exists, err = docker.Exists(pod, docker.Exited)
+	exists, err = dockerh.Exists(pod, dockerh.Exited)
 	if !assert.NoError(t, err, "error not expected") {
 		return
 	}
@@ -219,7 +220,7 @@ func TestWaitUntilListening(t *testing.T) {
 		<-time.After(1 * time.Second)
 	}()
 
-	connectedMap := docker.WaitUntilListening(3*time.Second, address)
+	connectedMap := dockerh.WaitUntilListening(3*time.Second, address)
 
 	assert.True(t, connectedMap[address], "expected the address connection")
 }
