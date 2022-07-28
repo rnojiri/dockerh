@@ -1,42 +1,33 @@
 package dockerh
 
 import (
-	"errors"
 	"time"
 )
 
 //
-// Commons command execution functions.
+// Scylla docker
 // author: rnojiri
 //
 
-var (
-	// ErrPodNotListening - raised when the pod is not listening
-	ErrPodNotListening error = errors.New("pod is not listening")
-)
+// CreateScylla - starts the scylla pod using custom parameters
+func CreateScylla(podName, extraCommands string) (string, error) {
 
-// StartScylla - starts the scylla pod
-func StartScylla(pod, extraCommands, networkFormat string, timeout time.Duration) (string, error) {
+	return CreateCustomScylla(podName, "", "", extraCommands, defaultWaitingTimeout)
+}
 
-	err := Run(pod, "scylladb/scylla", extraCommands)
+// CreateScyllaInNetwork - starts the scylla pod using custom parameters
+func CreateScyllaInNetwork(podName, network, extraCommands string) (string, error) {
+
+	return CreateCustomScylla(podName, "", network, extraCommands, defaultWaitingTimeout)
+}
+
+// CreateCustomScylla - starts the scylla pod
+func CreateCustomScylla(podName, networkInspectFormat, network, extraCommands string, timeout time.Duration) (string, error) {
+
+	err := Run(podName, "scylladb/scylla", network, extraCommands)
 	if err != nil {
 		return "", nil
 	}
 
-	ips, err := GetIPs(networkFormat, pod)
-	if err != nil {
-		return "", nil
-	}
-
-	if len(ips) == 0 {
-		return "", ErrPodNotListening
-	}
-
-	connectedMap := WaitUntilListening(timeout, ips[0])
-
-	if _, ok := connectedMap[ips[0]]; !ok {
-		return "", ErrPodNotListening
-	}
-
-	return ips[0], nil
+	return WaitUntilListeningAndGetPodIP(podName, networkInspectFormat, network, 9042, timeout)
 }

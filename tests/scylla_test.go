@@ -1,9 +1,7 @@
-package docker_test
+package dockerh_test
 
 import (
-	"regexp"
 	"testing"
-	"time"
 
 	"github.com/uol/dockerh"
 
@@ -17,12 +15,12 @@ func TestScylla(t *testing.T) {
 
 	dockerh.Remove(pod)
 
-	ip, err := dockerh.StartScylla(pod, "", "", 30*time.Second)
+	ip, err := dockerh.CreateScylla(pod, "")
 	if !assert.NoError(t, err, "error starting scylla pod") {
 		return
 	}
 
 	defer dockerh.Remove(pod)
 
-	assert.Regexp(t, regexp.MustCompile(`[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+`), ip, "expected some valid ip")
+	validateIP(t, ip)
 }
