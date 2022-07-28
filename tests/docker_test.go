@@ -1,4 +1,4 @@
-package docker_test
+package dockerh_test
 
 import (
 	"fmt"
@@ -13,6 +13,8 @@ import (
 
 	"github.com/stretchr/testify/assert"
 )
+
+var ipRegexp *regexp.Regexp = regexp.MustCompile(`[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+`)
 
 //
 // Has tests for the docker utility functions.
@@ -53,7 +55,18 @@ func podIP(t *testing.T, pod string) (string, bool) {
 	return string(output), true
 }
 
-func podExisted(t *testing.T, pod string) bool {
+func networkLS(t *testing.T, network string) string {
+
+	output, err := exec.Command("/bin/sh", "-c", fmt.Sprintf("docker network ls | grep %s", network)).Output()
+
+	if !assert.NoError(t, err, "error listing networks") {
+		return ""
+	}
+
+	return string(output)
+}
+
+func podExists(t *testing.T, pod string) bool {
 
 	output, ok := psPod(t, pod)
 	if !ok {
@@ -70,14 +83,14 @@ func TestRun(t *testing.T) {
 
 	rmPod(pod)
 
-	err := dockerh.Run(pod, "hello-world", "")
+	err := dockerh.Run(pod, "hello-world", "", "")
 	if assert.NoError(t, err, "error not expected") {
 		return
 	}
 
 	defer rmPod(pod)
 
-	podExisted(t, pod)
+	podExists(t, pod)
 }
 
 // TestRemove - tests remove command
@@ -91,7 +104,7 @@ func TestRemove(t *testing.T) {
 		return
 	}
 
-	if !podExisted(t, pod) {
+	if !podExists(t, pod) {
 		return
 	}
 
@@ -121,18 +134,18 @@ func TestGetIPs(t *testing.T) {
 
 	defer rmPod(pod)
 
-	if !podExisted(t, pod) {
+	if !podExists(t, pod) {
 		return
 	}
 
 	format := ".NetworkSettings.Networks.bridge.IPAddress"
 
-	libIps, err := dockerh.GetIPs(format, pod)
-	if !assert.NoError(t, err, "error not expected") {
+	libIps, err := dockerh.GetIPs(format, "", pod)
+	if !assert.NoError(t, err, "error not expected", err) {
 		return
 	}
 
-	if !assert.Len(t, libIps, 1, "expected only one ip") {
+	if !assert.Len(t, libIps, 3, "expected 3 ips") {
 		return
 	}
 
@@ -141,7 +154,7 @@ func TestGetIPs(t *testing.T) {
 		return
 	}
 
-	assert.Contains(t, libIps[0], strings.ReplaceAll(inspect, "\n", ""), "expected same IP")
+	assert.Contains(t, libIps, strings.ReplaceAll(inspect, "\n", ""), "expected same IP")
 }
 
 // TestExists - tests exists command
@@ -155,7 +168,7 @@ func TestExists(t *testing.T) {
 		return
 	}
 
-	if !podExisted(t, pod) {
+	if !podExists(t, pod) {
 		return
 	}
 
@@ -196,12 +209,12 @@ func TestExists(t *testing.T) {
 // TestWaitUntilListening - wait until the host and port is listening
 func TestWaitUntilListening(t *testing.T) {
 
-	address := "localhost:18123"
+	address := dockerh.NewAddress("localhost", 18123)
 
 	go func() {
 		<-time.After(1 * time.Second)
 
-		listener, err := net.Listen("tcp", address)
+		listener, err := net.Listen("tcp", address.GetAddress())
 		if assert.NoError(t, err, "expected no error when listening") {
 			return
 		}
@@ -220,7 +233,41 @@ func TestWaitUntilListening(t *testing.T) {
 		<-time.After(1 * time.Second)
 	}()
 
-	connectedMap := dockerh.WaitUntilListening(3*time.Second, address)
+	connected := dockerh.WaitUntilListening(3*time.Second, address)
 
-	assert.True(t, connectedMap[address], "expected the address connection")
+	assert.True(t, len(connected) > 0, "expected the address connection")
+}
+
+func TestBridgeNetwork(t *testing.T) {
+
+	expected := "dockerh-network-test"
+
+	dockerh.RemoveBridgeNetwork(expected)
+
+	err := dockerh.CreateBridgeNetwork(expected)
+	if assert.NoError(t, err, "expected no error when creating a network") {
+		return
+	}
+
+	res := networkLS(t, expected)
+	if !assert.True(t, len(res) > 0, "expected some result") {
+		return
+	}
+
+	assert.Equal(t, expected, res, "expected to find the network")
+
+	err = dockerh.RemoveBridgeNetwork(expected)
+	if assert.NoError(t, err, "expected no error when removing a network") {
+		return
+	}
+
+	res = networkLS(t, expected)
+	if !assert.True(t, len(res) == 0, "expected no results") {
+		return
+	}
+}
+
+func validateIP(t *testing.T, ip string) {
+
+	assert.Regexp(t, ipRegexp, ip, "expected some valid ip")
 }
