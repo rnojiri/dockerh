@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync/atomic"
 	"time"
 )
 
@@ -61,26 +62,31 @@ const (
 	// DefaultnetworkInspectFormat - the default inspect format
 	DefaultnetworkInspectFormat string = `(index .NetworkSettings.Networks "%s").IPAddress`
 
-	defaultNetwork        string        = "bridge"
-	defaultWaitingTimeout time.Duration = 1 * time.Minute
+	defaultNetwork          string        = "bridge"
+	defaultNoConnTimeout    time.Duration = 1 * time.Minute
+	defaultAfterConnTimeout time.Duration = 3 * time.Second
 )
 
+// Address - some pod address
 type Address struct {
-	host string
-	port int
+	Host      string
+	Port      int
+	Fallback  bool
+	Connected bool
 }
 
 func (a Address) GetAddress() string {
 
-	return fmt.Sprintf("%s:%d", a.host, a.port)
+	return fmt.Sprintf("%s:%d", a.Host, a.Port)
 }
 
 // NewAddress - creates a new address
-func NewAddress(host string, port int) Address {
+func NewAddress(host string, port int, fallback bool) Address {
 
 	return Address{
-		host: host,
-		port: port,
+		Host:     host,
+		Port:     port,
+		Fallback: fallback,
 	}
 }
 
@@ -119,7 +125,14 @@ func Remove(pod string) error {
 }
 
 // WaitUntilListeningAndGetPodIP - wait for the pod to be listening in the specied port and returns the pod's ip
-func WaitUntilListeningAndGetPodIP(podName, networkInspectFormat, network string, port int, waitTimeout time.Duration) (string, error) {
+func WaitUntilListeningAndGetPodIP(
+	podName,
+	networkInspectFormat,
+	network string,
+	port int,
+	noConnTimeout,
+	afterConnTimeout time.Duration,
+) (string, error) {
 
 	ips, err := GetIPs(networkInspectFormat, network, podName)
 	if err != nil {
@@ -130,23 +143,21 @@ func WaitUntilListeningAndGetPodIP(podName, networkInspectFormat, network string
 		return "", fmt.Errorf("%w: %s", ErrPodIPNotFound, podName)
 	}
 
-	addresses := make([]Address, len(ips))
-
-	for i, ip := range ips {
-		addresses[i] = NewAddress(ip, port)
+	for i := 0; i < len(ips); i++ {
+		ips[i].Port = port
 	}
 
-	connected := WaitUntilListening(waitTimeout, addresses...)
+	connected := WaitUntilListening(noConnTimeout, afterConnTimeout, ips...)
 
 	if len(connected) == 0 {
 		return "", fmt.Errorf("%w: %s:%d", ErrPodNotListening, podName, port)
 	}
 
-	return connected[0].host, nil
+	return connected[0].Host, nil
 }
 
 // GetIPs - return the pod's ips
-func GetIPs(networkInspectFormat, network string, pod ...string) ([]string, error) {
+func GetIPs(networkInspectFormat, network string, pod ...string) ([]Address, error) {
 
 	if len(network) == 0 {
 		network = defaultNetwork
@@ -163,9 +174,6 @@ func GetIPs(networkInspectFormat, network string, pod ...string) ([]string, erro
 
 	lines := strings.Split(regexpDirtChars.ReplaceAllString(string(output), ""), "\n")
 
-	all := []string{}
-	all = append(all, fallbackHosts...)
-
 	ips := lines[0 : len(lines)-1]
 	for i, ip := range ips {
 		if strings.Contains(ip, "<no value>") {
@@ -173,11 +181,19 @@ func GetIPs(networkInspectFormat, network string, pod ...string) ([]string, erro
 		}
 	}
 
+	addresses := []Address{}
+
 	if len(ips) > 0 {
-		all = append(all, ips...)
+		for _, ip := range ips {
+			addresses = append(addresses, NewAddress(ip, 0, false))
+		}
 	}
 
-	return all, nil
+	for _, fallbackIP := range fallbackHosts {
+		addresses = append(addresses, NewAddress(fallbackIP, 0, true))
+	}
+
+	return addresses, nil
 }
 
 // Exists - check if a pod exists
@@ -192,19 +208,20 @@ func Exists(pod string, status PodStatus) (bool, error) {
 }
 
 // WaitUntilListening - wait some pod(s) to be listening
-func WaitUntilListening(timeout time.Duration, addresses ...Address) (connected []Address) {
+func WaitUntilListening(noConnTimeout, afterConnTimeout time.Duration, addresses ...Address) []Address {
 
-	if timeout == 0 {
-		timeout = defaultWaitingTimeout
+	if noConnTimeout == 0 {
+		noConnTimeout = defaultNoConnTimeout
 	}
 
-	connected = []Address{}
+	var expectedConns uint32 = uint32(len(addresses))
+	var numConnected uint32
 
 	testConn := func(ctx context.Context, doneFunc context.CancelFunc, i int) {
 
 		for {
 
-			address := addresses[i].GetAddress()
+			address := (addresses)[i].GetAddress()
 
 			select {
 			case <-ctx.Done():
@@ -223,14 +240,19 @@ func WaitUntilListening(timeout time.Duration, addresses ...Address) (connected 
 
 			if conn != nil {
 				defer conn.Close()
-				connected = append(connected, addresses[i])
+				addresses[i].Connected = true
+				nowConnected := atomic.AddUint32(&numConnected, 1)
+				if expectedConns != nowConnected {
+					<-time.After(afterConnTimeout)
+				}
+
 				doneFunc()
 				break
 			}
 		}
 	}
 
-	ctx, doneFunc := context.WithTimeout(context.Background(), timeout)
+	ctx, doneFunc := context.WithTimeout(context.Background(), noConnTimeout)
 
 	for i := 0; i < len(addresses); i++ {
 
@@ -240,22 +262,16 @@ func WaitUntilListening(timeout time.Duration, addresses ...Address) (connected 
 	<-ctx.Done()
 	doneFunc = nil
 
-	return connected
-}
+	connected := make([]Address, 0)
 
-// WaitUntilListeningInSamePort - wait some pod(s) to be listening in a same port
-func WaitUntilListeningInSamePort(timeout time.Duration, port int, hosts ...string) (connected []Address) {
+	for _, address := range addresses {
 
-	addresses := make([]Address, len(hosts))
-
-	for i, h := range hosts {
-		addresses[i] = Address{
-			host: h,
-			port: port,
+		if address.Connected {
+			connected = append(connected, address)
 		}
 	}
 
-	return WaitUntilListening(timeout, addresses...)
+	return connected
 }
 
 // CreateBridgeNetwork - creates a bridge network

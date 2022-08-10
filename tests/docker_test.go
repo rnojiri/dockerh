@@ -154,7 +154,7 @@ func TestGetIPs(t *testing.T) {
 		return
 	}
 
-	assert.Contains(t, libIps, strings.ReplaceAll(inspect, "\n", ""), "expected same IP")
+	assert.Contains(t, libIps, dockerh.NewAddress(strings.ReplaceAll(inspect, "\n", ""), 0, false), "expected same IP")
 }
 
 // TestExists - tests exists command
@@ -209,7 +209,7 @@ func TestExists(t *testing.T) {
 // TestWaitUntilListening - wait until the host and port is listening
 func TestWaitUntilListening(t *testing.T) {
 
-	address := dockerh.NewAddress("localhost", 18123)
+	address := dockerh.NewAddress("localhost", 18123, false)
 
 	go func() {
 		<-time.After(1 * time.Second)
@@ -233,9 +233,13 @@ func TestWaitUntilListening(t *testing.T) {
 		<-time.After(1 * time.Second)
 	}()
 
-	connected := dockerh.WaitUntilListening(3*time.Second, address)
+	connected := dockerh.WaitUntilListening(3*time.Second, 1*time.Second, address)
 
-	assert.True(t, len(connected) > 0, "expected the address connection")
+	assert.Len(t, connected, 1, "expected the address connection")
+	assert.True(t, connected[0].Connected, "expected connected true")
+	assert.False(t, connected[0].Fallback, "expected no fallback")
+	assert.Equal(t, "localhost", connected[0].Host, "expected same host")
+	assert.Equal(t, 18123, connected[0].Port, "expected same port")
 }
 
 func TestBridgeNetwork(t *testing.T) {
