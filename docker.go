@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"regexp"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -216,6 +217,7 @@ func WaitUntilListening(noConnTimeout, afterConnTimeout time.Duration, addresses
 
 	var expectedConns uint32 = uint32(len(addresses))
 	var numConnected uint32
+	var mu sync.Mutex
 
 	testConn := func(ctx context.Context, doneFunc context.CancelFunc, i int) {
 
@@ -240,7 +242,9 @@ func WaitUntilListening(noConnTimeout, afterConnTimeout time.Duration, addresses
 
 			if conn != nil {
 				defer conn.Close()
+				mu.Lock()
 				addresses[i].Connected = true
+				mu.Unlock()
 				nowConnected := atomic.AddUint32(&numConnected, 1)
 				if expectedConns != nowConnected {
 					<-time.After(afterConnTimeout)
@@ -264,12 +268,14 @@ func WaitUntilListening(noConnTimeout, afterConnTimeout time.Duration, addresses
 
 	connected := make([]Address, 0)
 
+	mu.Lock()
 	for _, address := range addresses {
 
 		if address.Connected {
 			connected = append(connected, address)
 		}
 	}
+	mu.Unlock()
 
 	return connected
 }
