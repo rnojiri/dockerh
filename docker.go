@@ -98,14 +98,14 @@ func createDockerCommand(cmd string) *exec.Cmd {
 }
 
 // Run - runs a pod
-func Run(name, image, network, extra string) error {
+func Run(name, image, network, dockerParams, execParams string) error {
 
 	networkParam := ""
 	if len(network) > 0 {
 		networkParam = fmt.Sprintf("--network %s", network)
 	}
 
-	output, err := createDockerCommand(fmt.Sprintf("run --name %s %s %s -d %s", name, networkParam, extra, image)).Output()
+	output, err := createDockerCommand(fmt.Sprintf("run --name %s %s %s -d %s %s", name, networkParam, dockerParams, image, execParams)).Output()
 	if err != nil {
 		return err
 	}

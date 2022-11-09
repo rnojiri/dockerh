@@ -24,7 +24,7 @@ func CreateScyllaInNetwork(podName, network, extraCommands string) (string, erro
 // CreateCustomScylla - starts the scylla pod
 func CreateCustomScylla(podName, networkInspectFormat, network, extraCommands string, noConnTimeout, afterConnTimeout time.Duration) (string, error) {
 
-	err := Run(podName, "scylladb/scylla", network, extraCommands)
+	err := Run(podName, "scylladb/scylla", network, extraCommands, "")
 	if err != nil {
 		return "", err
 	}

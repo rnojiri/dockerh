@@ -83,7 +83,7 @@ func TestRun(t *testing.T) {
 
 	rmPod(pod)
 
-	err := dockerh.Run(pod, "hello-world", "", "")
+	err := dockerh.Run(pod, "hello-world", "", "", "")
 	if assert.NoError(t, err, "error not expected") {
 		return
 	}

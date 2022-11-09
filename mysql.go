@@ -25,9 +25,9 @@ func CreateMysqlInNetwork(podName, network, password, database string, port int)
 // CreateCustomMysql - starts the mysql pod
 func CreateCustomMysql(podName, networkInspectFormat, network, password, database string, port int, moConnTimeout, afterConnTimeout time.Duration) (string, error) {
 
-	extraArgs := fmt.Sprintf("-p %d:%d -e MYSQL_ROOT_PASSWORD=%s -e MYSQL_DATABASE=%s", port, port, password, database)
+	extraArgs := fmt.Sprintf("-p %d:3306 -e MYSQL_ROOT_PASSWORD=%s -e MYSQL_DATABASE=%s", port, password, database)
 
-	err := Run(podName, "mysql", network, extraArgs)
+	err := Run(podName, "mysql", network, extraArgs, "")
 	if err != nil {
 		return "", err
 	}

@@ -25,9 +25,9 @@ func CreatePostgresInNetwork(podName, network, user, password, database string, 
 // CreateCustomPostgres - starts the postgres pod
 func CreateCustomPostgres(podName, networkInspectFormat, network, user, password, database string, port int, noConnTimeout, afterConnTimeout time.Duration) (string, error) {
 
-	extraArgs := fmt.Sprintf("-p %d:%d -e POSTGRES_USER=%s -e POSTGRES_PASSWORD=%s -e POSTGRES_DB=%s", port, port, user, password, database)
+	extraArgs := fmt.Sprintf("-p %d:5432 -e POSTGRES_USER=%s -e POSTGRES_PASSWORD=%s -e POSTGRES_DB=%s", port, user, password, database)
 
-	err := Run(podName, "postgres", network, extraArgs)
+	err := Run(podName, "postgres", network, extraArgs, "")
 	if err != nil {
 		return "", err
 	}
