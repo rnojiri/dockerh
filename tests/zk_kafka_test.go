@@ -3,7 +3,7 @@ package dockerh_test
 import (
 	"testing"
 
-	"github.com/uol/dockerh"
+	"github.com/rnojiri/dockerh"
 
 	"github.com/stretchr/testify/assert"
 )
