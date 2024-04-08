@@ -26,6 +26,16 @@ func rmPod(pod string) {
 	exec.Command("/bin/sh", "-c", "docker rm -f "+pod).Run()
 }
 
+func stopPod(pod string) {
+
+	exec.Command("/bin/sh", "-c", "docker stop "+pod).Run()
+}
+
+func startPod(pod string) {
+
+	exec.Command("/bin/sh", "-c", "docker start "+pod).Run()
+}
+
 func runPod(t *testing.T, pod, image string) bool {
 
 	err := exec.Command("/bin/sh", "-c", fmt.Sprintf("docker run -d --name %s %s", pod, image)).Run()
@@ -160,11 +170,11 @@ func TestGetIPs(t *testing.T) {
 // TestExists - tests exists command
 func TestExists(t *testing.T) {
 
-	pod := "test-exists-hello-world"
+	pod := "test-exists-http-https-echo"
 
 	rmPod(pod)
 
-	if !runPod(t, pod, "hello-world") {
+	if !runPod(t, pod, "mendhak/http-https-echo") {
 		return
 	}
 
@@ -172,36 +182,45 @@ func TestExists(t *testing.T) {
 		return
 	}
 
-	defer rmPod(pod)
-
-	exists, err := dockerh.Exists(pod, dockerh.Running)
+	running, err := dockerh.Exists(pod, dockerh.Running)
 	if !assert.NoError(t, err, "error not expected") {
 		return
 	}
 
-	if !assert.True(t, exists, "expected pod existed") {
+	if !assert.True(t, running, "expected pod running") {
 		return
 	}
 
-	<-time.After(2 * time.Second)
+	stopPod(pod)
 
-	exists, err = dockerh.Exists(pod, dockerh.Exited)
+	exited, err := dockerh.Exists(pod, dockerh.Exited)
 	if !assert.NoError(t, err, "error not expected") {
 		return
 	}
 
-	if !assert.True(t, exists, "expected pod existed") {
+	if !assert.True(t, exited, "expected pod exited") {
+		return
+	}
+
+	startPod(pod)
+
+	running, err = dockerh.Exists(pod, dockerh.Running)
+	if !assert.NoError(t, err, "error not expected") {
+		return
+	}
+
+	if !assert.True(t, running, "expected pod running") {
 		return
 	}
 
 	rmPod(pod)
 
-	exists, err = dockerh.Exists(pod, dockerh.Exited)
+	notFound, err := dockerh.Exists(pod, dockerh.NotFound)
 	if !assert.NoError(t, err, "error not expected") {
 		return
 	}
 
-	if !assert.False(t, exists, "expected pod not exists") {
+	if !assert.True(t, notFound, "expected pod not exists") {
 		return
 	}
 }
