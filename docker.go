@@ -60,6 +60,9 @@ const (
 	// Dead - pod status
 	Dead PodStatus = "dead"
 
+	// NotFound - pod status
+	NotFound PodStatus = "not found"
+
 	// DefaultnetworkInspectFormat - the default inspect format
 	DefaultnetworkInspectFormat string = `(index .NetworkSettings.Networks "%s").IPAddress`
 
@@ -200,9 +203,21 @@ func GetIPs(networkInspectFormat, network string, pod ...string) ([]Address, err
 // Exists - check if a pod exists
 func Exists(pod string, status PodStatus) (bool, error) {
 
-	output, err := createDockerCommand(fmt.Sprintf(`ps -a -q --filter "name=%s" --filter "status=%s" --format "{{.Names}}"`, pod, status)).Output()
+	cmd := fmt.Sprintf(`ps -a -f name=%s`, pod)
+
+	if status != NotFound {
+		cmd = fmt.Sprintf(`%s -f status=%s`, cmd, status)
+	}
+
+	cmd += ` --format "{{.Names}}"`
+
+	output, err := createDockerCommand(cmd).Output()
 	if err != nil {
 		return false, err
+	}
+
+	if len(output) == 0 && status == NotFound {
+		return true, nil
 	}
 
 	return regexpDirtCharsAndLineBreaks.ReplaceAllString(string(output), "") == pod, nil
