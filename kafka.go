@@ -2,6 +2,7 @@ package dockerh
 
 import (
 	"fmt"
+	"strings"
 	"time"
 )
 
@@ -38,24 +39,52 @@ func CreateCustomKafka(podName, networkInspectFormat, network string, kafkaPort 
 	return WaitUntilListeningAndGetPodIP(podName, networkInspectFormat, network, kafkaPort, noConnTimeout, afterConnTimeout)
 }
 
-// CreateKafkaWurstmeister - starts the kafka pod using default configurations
-func CreateKafkaWurstmeister(podName string, kafkaPort int, zookeeperHost string, zookeeperPort int) (string, error) {
+type Topic struct {
+	Name       string
+	Partitions int
+	Replicas   int
+}
 
-	return CreateCustomKafkaWurstmeister(podName, "", "", kafkaPort, zookeeperHost, zookeeperPort, defaultNoConnTimeout, defaultAfterConnTimeout)
+func (t Topic) String() string {
+
+	return fmt.Sprintf("%s:%d:%d", t.Name, t.Partitions, t.Replicas)
+}
+
+// CreateKafkaWurstmeister - starts the kafka pod using default configurations
+func CreateKafkaWurstmeister(podName string, kafkaPort int, zookeeperHost string, zookeeperPort int, topics ...Topic) (string, error) {
+
+	return CreateCustomKafkaWurstmeister(podName, "", "", kafkaPort, zookeeperHost, zookeeperPort, defaultNoConnTimeout, defaultAfterConnTimeout, topics...)
 }
 
 // CreateKafkaWurstmeisterInNetwork - starts the kafka pod using default configurations
-func CreateKafkaWurstmeisterInNetwork(podName, network string, kafkaPort int, zookeeperHost string, zookeeperPort int) (string, error) {
+func CreateKafkaWurstmeisterInNetwork(podName, network string, kafkaPort int, zookeeperHost string, zookeeperPort int, topics ...Topic) (string, error) {
 
-	return CreateCustomKafkaWurstmeister(podName, "", network, kafkaPort, zookeeperHost, zookeeperPort, defaultNoConnTimeout, defaultAfterConnTimeout)
+	return CreateCustomKafkaWurstmeister(podName, "", network, kafkaPort, zookeeperHost, zookeeperPort, defaultNoConnTimeout, defaultAfterConnTimeout, topics...)
 }
 
 // CreateCustomKafkaWurstmeister - starts the kafka pod using custom configurations
-func CreateCustomKafkaWurstmeister(podName, networkInspectFormat, network string, kafkaPort int, zookeeperHost string, zookeeperPort int, noConnTimeout, afterConnTimeout time.Duration) (string, error) {
+func CreateCustomKafkaWurstmeister(podName, networkInspectFormat, network string, kafkaPort int, zookeeperHost string, zookeeperPort int, noConnTimeout, afterConnTimeout time.Duration, topics ...Topic) (string, error) {
+
+	kafkaTopics := make([]string, len(topics))
+
+	if len(topics) > 0 {
+
+		for i, item := range topics {
+
+			kafkaTopics[i] = item.String()
+		}
+	}
+
+	kafkaTopicsStr := ""
+
+	if len(kafkaTopics) > 0 {
+
+		kafkaTopicsStr = strings.Join(kafkaTopics, ",")
+	}
 
 	extraArgs := fmt.Sprintf(
-		"-p %d:9092 -e KAFKA_ADVERTISED_HOST_NAME=kafka -e KAFKA_ADVERTISED_PORT=%d -e KAFKA_ZOOKEEPER_CONNECT=%s:%d",
-		kafkaPort, kafkaPort, zookeeperHost, zookeeperPort,
+		"-p %d:9092 -e KAFKA_ADVERTISED_HOST_NAME=kafka -e KAFKA_ADVERTISED_PORT=%d -e KAFKA_ZOOKEEPER_CONNECT=%s:%d -e KAFKA_CREATE_TOPICS=%s",
+		kafkaPort, kafkaPort, zookeeperHost, zookeeperPort, kafkaTopicsStr,
 	)
 
 	err := Run(podName, "wurstmeister/kafka:latest", network, extraArgs, "")
