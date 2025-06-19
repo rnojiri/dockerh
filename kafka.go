@@ -83,7 +83,7 @@ func CreateCustomKafkaWurstmeister(podName, networkInspectFormat, network string
 	}
 
 	extraArgs := fmt.Sprintf(
-		"-p %d:9092 -e KAFKA_ADVERTISED_HOST_NAME=kafka -e KAFKA_ADVERTISED_PORT=%d -e KAFKA_ZOOKEEPER_CONNECT=%s:%d -e KAFKA_CREATE_TOPICS=%s",
+		"-p %d:9092 -e KAFKA_ADVERTISED_HOST_NAME=localhost -e KAFKA_ADVERTISED_PORT=%d -e KAFKA_ZOOKEEPER_CONNECT=%s:%d -e KAFKA_CREATE_TOPICS=%s",
 		kafkaPort, kafkaPort, zookeeperHost, zookeeperPort, kafkaTopicsStr,
 	)
 
