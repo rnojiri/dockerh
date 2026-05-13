@@ -15,7 +15,7 @@ func TestMemcached(t *testing.T) {
 
 	dockerh.Remove(pod)
 
-	r, err := dockerh.CreateMemcached(pod, 11211, 64)
+	r, err := dockerh.CreateMemcached(pod, 11211, 64, "")
 	if !assert.NoError(t, err, "error starting memcached pod") {
 		return
 	}
@@ -26,7 +26,7 @@ func TestMemcached(t *testing.T) {
 
 	dockerh.Remove(pod)
 
-	r, err = dockerh.CreateMemcached(pod, 11211, 0)
+	r, err = dockerh.CreateMemcached(pod, 11211, 0, "2m")
 	if !assert.NoError(t, err, "error starting memcached pod with default memory") {
 		return
 	}
