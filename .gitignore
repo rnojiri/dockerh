@@ -13,3 +13,6 @@
 
 # Dependency directories (remove the comment below to include it)
 vendor/
+
+# CodeGraph local index (each developer builds their own)
+.codegraph/
