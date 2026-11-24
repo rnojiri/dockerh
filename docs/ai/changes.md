@@ -7,6 +7,16 @@ time, keep both entries.
 
 ## Log
 
+### 2026-11-24 — up to `f3add9e32fd1`
+
+<!-- wh-repo-docs-and-graph-for-ai: commit=f3add9e32fd12e3ac11e0b272c27649e6d9f1f99 date=2026-11-24T00:00:00-03:00 -->
+
+- fix: each readiness command attempt is bounded. New `ExecWithTimeout` and `DefaultExecAttemptTimeout` (15s);
+  `WaitUntilCommandSucceeds` kills an attempt after min(time left, 15s), so a hung `docker exec` (Kafka CLI retrying
+  while the broker starts) no longer blocks past the total timeout. `Exec` is unchanged (no limit).
+
+Docs updated: `docs/ARCHITECTURE.md`, `docs/ai/code-map.md`
+
 ### 2026-11-23 — up to `dd6213153a24`
 
 <!-- wh-repo-docs-and-graph-for-ai: commit=dd6213153a244369783ea64e8f0c1f8b66ef0cde date=2026-11-23T16:23:02-03:00 fp=abb4e7259b1bfcac2bec66a1cb15fe10a6eeea8cb5bc87fcde0715d62b8c3655 -->
