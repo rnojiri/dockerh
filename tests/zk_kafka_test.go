@@ -1,6 +1,7 @@
 package dockerh_test
 
 import (
+	"context"
 	"strings"
 	"testing"
 	"time"
@@ -148,4 +149,53 @@ func TestWaitUntilCommandSucceeds(t *testing.T) {
 	err = dockerh.WaitUntilCommandSucceeds(pod, "echo nope", "imok", 2*time.Second)
 	assert.ErrorIs(t, err, dockerh.ErrPodNotReady)
 	assert.True(t, strings.Contains(err.Error(), pod), "expected the pod in the error")
+}
+
+// TestWaitUntilCommandSucceedsHungCommand - a command that never returns must not outlive the total timeout
+func TestWaitUntilCommandSucceedsHungCommand(t *testing.T) {
+
+	pod := "test-ready-hung-command-pod"
+
+	rmPod(pod)
+
+	err := dockerh.Run(pod, "alpine:latest", "", "", "sleep 120")
+	if !assert.NoError(t, err, "error creating pod") {
+		return
+	}
+
+	defer rmPod(pod)
+
+	timeout := 4 * time.Second
+	start := time.Now()
+
+	err = dockerh.WaitUntilCommandSucceeds(pod, "sleep 600", "", timeout)
+
+	elapsed := time.Since(start)
+
+	assert.ErrorIs(t, err, dockerh.ErrPodNotReady)
+	assert.Less(t, elapsed, timeout+5*time.Second, "the hung command was not bounded by the timeout")
+}
+
+// TestExecWithTimeout - the docker exec client is killed when the timeout elapses
+func TestExecWithTimeout(t *testing.T) {
+
+	pod := "test-exec-timeout-pod"
+
+	rmPod(pod)
+
+	err := dockerh.Run(pod, "alpine:latest", "", "", "sleep 120")
+	if !assert.NoError(t, err, "error creating pod") {
+		return
+	}
+
+	defer rmPod(pod)
+
+	out, err := dockerh.ExecWithTimeout(pod, "echo hi", 10*time.Second)
+	assert.NoError(t, err)
+	assert.Contains(t, out, "hi")
+
+	start := time.Now()
+	_, err = dockerh.ExecWithTimeout(pod, "sleep 600", 2*time.Second)
+	assert.ErrorIs(t, err, context.DeadlineExceeded)
+	assert.Less(t, time.Since(start), 6*time.Second)
 }

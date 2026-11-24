@@ -26,6 +26,10 @@
 `WaitUntilCommandSucceeds(pod, command, expectedOutput, timeout)` polls `Exec(pod, command)` (`docker exec pod sh -c`)
 every second until it exits 0 and the output contains `expectedOutput`; on timeout it returns `ErrPodNotReady` with
 the last error and output. `timeout <= 0` means `DefaultReadyTimeout` (exported var, 2 minutes, change it to tune).
+Each attempt runs through `ExecWithTimeout` (`exec.CommandContext` plus `WaitDelay`) and is killed after
+`DefaultExecAttemptTimeout` (exported var, 15 seconds) or the time left until the deadline, whichever is shorter, so a
+command that never returns (the Kafka CLI retries forever while the broker starts) cannot exceed the total timeout.
+`Exec` keeps no time limit; only the `docker exec` client is killed, the process inside the container may linger.
 
 | Helper | Check | Why |
 | --- | --- | --- |

@@ -72,7 +72,11 @@ const (
 	// DefaultReadyTimeout - the default time to wait for a readiness command to succeed
 	DefaultReadyTimeout time.Duration = 2 * time.Minute
 
+	// DefaultExecAttemptTimeout - the longest a single readiness command attempt may run before it is killed
+	DefaultExecAttemptTimeout time.Duration = 15 * time.Second
+
 	defaultReadyInterval    time.Duration = 1 * time.Second
+	defaultExecWaitDelay    time.Duration = 2 * time.Second
 	defaultNetwork          string        = "bridge"
 	defaultNoConnTimeout    time.Duration = 1 * time.Minute
 	defaultAfterConnTimeout time.Duration = 3 * time.Second
@@ -328,16 +332,41 @@ func RemoveBridgeNetwork(name string) error {
 	return err
 }
 
-// Exec - executes a shell command inside a running pod and returns its combined output
+// Exec - executes a shell command inside a running pod and returns its combined output (no time limit)
 func Exec(pod, command string) (string, error) {
 
-	output, err := exec.Command("docker", "exec", pod, "sh", "-c", command).CombinedOutput()
+	return ExecWithTimeout(pod, command, 0)
+}
+
+// ExecWithTimeout - like Exec, but kills the docker exec client when the timeout elapses (timeout <= 0 means no limit).
+// A timeout is reported as an error wrapping context.DeadlineExceeded.
+func ExecWithTimeout(pod, command string, timeout time.Duration) (string, error) {
+
+	ctx := context.Background()
+
+	if timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, timeout)
+		defer cancel()
+	}
+
+	cmd := exec.CommandContext(ctx, "docker", "exec", pod, "sh", "-c", command)
+
+	// do not wait forever for the output pipes after the client was killed
+	cmd.WaitDelay = defaultExecWaitDelay
+
+	output, err := cmd.CombinedOutput()
+	if err != nil && ctx.Err() != nil {
+		err = fmt.Errorf("%w: command did not finish in %s: %v", ctx.Err(), timeout, err)
+	}
 
 	return string(output), err
 }
 
 // WaitUntilCommandSucceeds - runs the command inside the pod until it exits successfully
-// and its output contains expectedOutput (any output when empty). Returns ErrPodNotReady on timeout.
+// and its output contains expectedOutput (any output when empty). Each attempt is killed after
+// DefaultExecAttemptTimeout (or the time left until the deadline), so a command that never returns cannot
+// exceed the total timeout. Returns ErrPodNotReady on timeout.
 func WaitUntilCommandSucceeds(pod, command, expectedOutput string, timeout time.Duration) error {
 
 	if timeout <= 0 {
@@ -350,7 +379,16 @@ func WaitUntilCommandSucceeds(pod, command, expectedOutput string, timeout time.
 
 	for {
 
-		lastOutput, lastErr = Exec(pod, command)
+		attemptTimeout := time.Until(deadline)
+		if DefaultExecAttemptTimeout > 0 && DefaultExecAttemptTimeout < attemptTimeout {
+			attemptTimeout = DefaultExecAttemptTimeout
+		}
+
+		if attemptTimeout <= 0 {
+			attemptTimeout = time.Millisecond
+		}
+
+		lastOutput, lastErr = ExecWithTimeout(pod, command, attemptTimeout)
 		if lastErr == nil && strings.Contains(lastOutput, expectedOutput) {
 			return nil
 		}

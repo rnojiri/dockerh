@@ -18,7 +18,7 @@ Where each feature lives, for agents looking for "the code that does X". Paths a
 | --- | --- | --- |
 | Run / remove / exists / networks | `docker.go` | `Run`, `Remove`, `Exists`, `CreateBridgeNetwork`, `RemoveBridgeNetwork` |
 | TCP wait | `docker.go` | `WaitUntilListening`, `WaitUntilListeningAndGetPodIP`, `GetIPs`, `Address` |
-| Command wait | `docker.go` | `Exec`, `WaitUntilCommandSucceeds`, `ErrPodNotReady`, `DefaultReadyTimeout` |
+| Command wait | `docker.go` | `Exec`, `ExecWithTimeout`, `WaitUntilCommandSucceeds`, `ErrPodNotReady`, `DefaultReadyTimeout`, `DefaultExecAttemptTimeout` |
 | Test helpers | `tests/docker_test.go` | `runPod`, `rmPod`, `validateIP`; tests for `docker.go` |
 
 ## Hotspots
