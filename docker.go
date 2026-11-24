@@ -28,6 +28,9 @@ var (
 	// ErrPodIPNotFound - raised when the inspect format output  didn't returned any ip
 	ErrPodIPNotFound error = errors.New("pod ip not found")
 
+	// ErrPodNotReady - raised when the readiness command did not succeed before the timeout
+	ErrPodNotReady error = errors.New("pod is not ready")
+
 	// ErrPodNotListening - raised when the pod is not listening
 	ErrPodNotListening error = errors.New("pod is not listening")
 
@@ -66,6 +69,10 @@ const (
 	// DefaultnetworkInspectFormat - the default inspect format
 	DefaultnetworkInspectFormat string = `(index .NetworkSettings.Networks "%s").IPAddress`
 
+	// DefaultReadyTimeout - the default time to wait for a readiness command to succeed
+	DefaultReadyTimeout time.Duration = 2 * time.Minute
+
+	defaultReadyInterval    time.Duration = 1 * time.Second
 	defaultNetwork          string        = "bridge"
 	defaultNoConnTimeout    time.Duration = 1 * time.Minute
 	defaultAfterConnTimeout time.Duration = 3 * time.Second
@@ -261,7 +268,8 @@ func WaitUntilListening(noConnTimeout, afterConnTimeout time.Duration, addresses
 				addresses[i].Connected = true
 				mu.Unlock()
 				nowConnected := atomic.AddUint32(&numConnected, 1)
-				if expectedConns != nowConnected {
+				// the last address to connect needs no pause, unless it is the only one
+				if expectedConns == 1 || expectedConns != nowConnected {
 					<-time.After(afterConnTimeout)
 				}
 
@@ -318,4 +326,41 @@ func RemoveBridgeNetwork(name string) error {
 	_, err := createDockerCommand(fmt.Sprintf("network rm %s", name)).Output()
 
 	return err
+}
+
+// Exec - executes a shell command inside a running pod and returns its combined output
+func Exec(pod, command string) (string, error) {
+
+	output, err := exec.Command("docker", "exec", pod, "sh", "-c", command).CombinedOutput()
+
+	return string(output), err
+}
+
+// WaitUntilCommandSucceeds - runs the command inside the pod until it exits successfully
+// and its output contains expectedOutput (any output when empty). Returns ErrPodNotReady on timeout.
+func WaitUntilCommandSucceeds(pod, command, expectedOutput string, timeout time.Duration) error {
+
+	if timeout <= 0 {
+		timeout = DefaultReadyTimeout
+	}
+
+	deadline := time.Now().Add(timeout)
+	lastOutput := ""
+	var lastErr error
+
+	for {
+
+		lastOutput, lastErr = Exec(pod, command)
+		if lastErr == nil && strings.Contains(lastOutput, expectedOutput) {
+			return nil
+		}
+
+		if time.Now().Add(defaultReadyInterval).After(deadline) {
+			break
+		}
+
+		time.Sleep(defaultReadyInterval)
+	}
+
+	return fmt.Errorf("%w: %s after %s (last error: %v, last output: %q)", ErrPodNotReady, pod, timeout, lastErr, strings.TrimSpace(lastOutput))
 }

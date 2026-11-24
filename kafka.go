@@ -92,5 +92,25 @@ func CreateCustomKafkaWurstmeister(podName, networkInspectFormat, network string
 		return "", err
 	}
 
-	return WaitUntilListeningAndGetPodIP(podName, networkInspectFormat, network, kafkaPort, noConnTimeout, afterConnTimeout)
+	ip, err := WaitUntilListeningAndGetPodIP(podName, networkInspectFormat, network, kafkaPort, noConnTimeout, afterConnTimeout)
+	if err != nil {
+		return "", err
+	}
+
+	// the docker port proxy accepts connections before the broker is up, so ask the broker itself
+	err = WaitUntilCommandSucceeds(podName, "kafka-broker-api-versions.sh --bootstrap-server localhost:9092", "", DefaultReadyTimeout)
+	if err != nil {
+		return "", err
+	}
+
+	// the image creates the topics in background after the broker starts
+	for _, topic := range topics {
+
+		err = WaitUntilCommandSucceeds(podName, fmt.Sprintf("kafka-topics.sh --bootstrap-server localhost:9092 --describe --topic %s", topic.Name), topic.Name, DefaultReadyTimeout)
+		if err != nil {
+			return "", err
+		}
+	}
+
+	return ip, nil
 }

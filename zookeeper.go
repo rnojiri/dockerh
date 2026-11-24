@@ -57,5 +57,16 @@ func CreateCustomZookeeperWurstmeister(podName, networkInspectFormat, network st
 		return "", err
 	}
 
-	return WaitUntilListeningAndGetPodIP(podName, networkInspectFormat, network, port, noConnTimeout, afterConnTimeout)
+	ip, err := WaitUntilListeningAndGetPodIP(podName, networkInspectFormat, network, port, noConnTimeout, afterConnTimeout)
+	if err != nil {
+		return "", err
+	}
+
+	// the docker port proxy accepts connections before zookeeper is up, so ask it with the "ruok" four letter word
+	err = WaitUntilCommandSucceeds(podName, "echo ruok | nc localhost 2181", "imok", DefaultReadyTimeout)
+	if err != nil {
+		return "", err
+	}
+
+	return ip, nil
 }
